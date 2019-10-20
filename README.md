@@ -69,5 +69,9 @@ ovs-docker add-port ovs-br1 eth1 container1 --ipaddress=173.16.1.2/24
 ovs-docker add-port ovs-br1 eth1 container2 --ipaddress=173.16.1.3/24
 ```    
 
-Try to ping the containers
-
+Try the connection between containers:   
+```
+./go-in-container1.sh
+ping 
+173.16.1.3   
+```
