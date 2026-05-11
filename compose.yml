@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  vswitch:
+    image: nsunina/openvswitch:1.0
+    container_name: vswitch
+    privileged: true
+    volumes:
+      - /proc:/proc
+      - /var/run/docker.sock:/var/run/docker.sock
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+
+  container1:
+    image: dockersecplayground/alpine_networking
+    container_name: container1
+    network_mode: "none"
+    cap_add:
+      - NET_ADMIN
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+  container2:
+    image: dockersecplayground/alpine_networking
+    container_name: container2
+    cap_add:
+      - NET_ADMIN
+    network_mode: "none"
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+  container3:
+    image: nsunina/alpine:3.18
+    container_name: container3
+    cap_add:
+      - NET_ADMIN
+    network_mode: "none"
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+  container4:
+    image: nsunina/alpine:3.18
+    container_name: container4
+    network_mode: "none"
+    cap_add:
+      - NET_ADMIN
+    stdin_open: true
+    tty: true
+    restart: "no"

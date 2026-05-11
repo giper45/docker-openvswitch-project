@@ -3,6 +3,10 @@ Experiment about implementing openvswitch in docker environments.
 Experiment is based on the following documentation: 
 http://containertutorials.com/network/ovs_docker.html
 
+
+
+
+
 ## Documentation    
 Build the openvswitch image:  
 ```bash   
@@ -12,7 +16,7 @@ build.sh
 
 Then run "run.sh" script.
 ```bash  
-MacBook-Pro:docker-openvswitch-project gaetanoperrone$ cat run.sh 
+cat run.sh 
 docker run -it -v /proc:/proc -v /var/run/docker.sock:/var/run/docker.sock --rm --name vswitch --privileged -d myovs
 docker run -d --name container1  --network none -it --rm dockersecplayground/alpine_networking
 docker run -d --name container2  --network none -it --rm dockersecplayground/alpine_networking
@@ -71,4 +75,116 @@ Try the connection between containers:
 ./go-in-container1.sh
 ping 
 173.16.1.3   
+```
+
+
+
+## Additional tests
+2 networks: 
+
+```
+ovs-vsctl add-br ovs-br1
+ifconfig ovs-br1 173.16.1.1 netmask 255.255.255.0 up
+ovs-docker add-port ovs-br1 eth1 container1 --ipaddress=173.16.1.2/24 
+ovs-docker add-port ovs-br1 eth1 container2 --ipaddress=173.16.1.3/24
+
+ovs-vsctl add-br ovs-br2
+ifconfig ovs-br2 173.16.2.1 netmask 255.255.255.0 up
+ovs-docker add-port ovs-br2 eth1 container3 --ipaddress=173.16.2.2/24 
+ovs-docker add-port ovs-br2 eth1 container4 --ipaddress=173.16.2.3/24
+```
+
+Now set default routes:
+```
+docker exec container1 ip route add default via 173.16.1.1
+docker exec container2 ip route add default via 173.16.1.1
+docker exec container3 ip route add default via 173.16.2.1
+docker exec container4 ip route add default via 173.16.2.1
+
+ovs-vsctl add-port ovs-br1 br1-to-br2 -- set Interface br1-to-br2 type=patch options:peer=br2-to-br1
+ovs-vsctl add-port ovs-br2 br2-to-br1 -- set Interface br2-to-br1 type=patch options:peer=br1-to-br2
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+sysctl -p
+
+```
+
+
+```
+# 1. Create the OVS Bridges and configure IP addresses:
+
+# Create the first bridge (ovs-br1) and configure the IP
+ovs-vsctl add-br ovs-br1
+ifconfig ovs-br1 173.16.1.1 netmask 255.255.255.0 up
+
+# Create the second bridge (ovs-br2) and configure the IP
+ovs-vsctl add-br ovs-br2
+ifconfig ovs-br2 173.16.2.1 netmask 255.255.255.0 up
+
+# Create the third bridge (ovs-br3) and configure the IP
+ovs-vsctl add-br ovs-br3
+ifconfig ovs-br3 173.16.3.1 netmask 255.255.255.0 up
+
+
+# 2. Add containers to the bridges and configure IP addresses:
+
+# Add containers to network 1 (ovs-br1)
+ovs-docker add-port ovs-br1 eth1 container1 --ipaddress=173.16.1.2/24
+ovs-docker add-port ovs-br1 eth1 container2 --ipaddress=173.16.1.3/24
+
+# Add containers to network 2 (ovs-br2)
+ovs-docker add-port ovs-br2 eth1 container3 --ipaddress=173.16.2.2/24
+ovs-docker add-port ovs-br2 eth1 container4 --ipaddress=173.16.2.3/24
+
+# Add containers to network 3 (ovs-br3)
+ovs-docker add-port ovs-br3 eth1 container5 --ipaddress=173.16.3.2/24
+ovs-docker add-port ovs-br3 eth1 container6 --ipaddress=173.16.3.3/24
+
+
+# 3. Set default routes for each container:
+
+# Network 1
+docker exec container1 ip route add default via 173.16.1.1
+docker exec container2 ip route add default via 173.16.1.1
+
+# Network 2
+docker exec container3 ip route add default via 173.16.2.1
+docker exec container4 ip route add default via 173.16.2.1
+
+# Network 3
+docker exec container5 ip route add default via 173.16.3.1
+docker exec container6 ip route add default via 173.16.3.1
+
+
+# 4. Create Patch connections between the bridges:
+
+# Connection between ovs-br1 and ovs-br2
+ovs-vsctl add-port ovs-br1 br1-to-br2 -- set Interface br1-to-br2 type=patch options:peer=br2-to-br1
+ovs-vsctl add-port ovs-br2 br2-to-br1 -- set Interface br2-to-br1 type=patch options:peer=br1-to-br2
+
+# Connection between ovs-br2 and ovs-br3
+ovs-vsctl add-port ovs-br2 br2-to-br3 -- set Interface br2-to-br3 type=patch options:peer=br3-to-br2
+ovs-vsctl add-port ovs-br3 br3-to-br2 -- set Interface br3-to-br2 type=patch options:peer=br2-to-br3
+
+
+# 5. Optionally, add routes between networks for inter-container communication:
+
+# Network 1 to Network 2 and 3
+docker exec container1 ip route add 173.16.2.0/24 via 173.16.1.1
+docker exec container1 ip route add 173.16.3.0/24 via 173.16.1.1
+docker exec container2 ip route add 173.16.2.0/24 via 173.16.1.1
+docker exec container2 ip route add 173.16.3.0/24 via 173.16.1.1
+
+# Network 2 to Network 1 and 3
+docker exec container3 ip route add 173.16.1.0/24 via 173.16.2.1
+docker exec container3 ip route add 173.16.3.0/24 via 173.16.2.1
+docker exec container4 ip route add 173.16.1.0/24 via 173.16.2.1
+docker exec container4 ip route add 173.16.3.0/24 via 173.16.2.1
+
+# Network 3 to Network 1 and 2
+docker exec container5 ip route add 173.16.1.0/24 via 173.16.3.1
+docker exec container5 ip route add 173.16.2.0/24 via 173.16.3.1
+docker exec container6 ip route add 173.16.1.0/24 via 173.16.3.1
+docker exec container6 ip route add 173.16.2.0/24 via 173.16.3.1
+
 ```
